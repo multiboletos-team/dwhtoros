@@ -40,7 +40,7 @@ jobs:
         run: mvn --batch-mode --update-snapshots verify
 
       
-docker-build:
+  docker-build:
     if: ${{ github.ref == 'refs/heads/dev' }}
     runs-on: [self-hosted, amazon-linux-2023]
     needs: project-build
