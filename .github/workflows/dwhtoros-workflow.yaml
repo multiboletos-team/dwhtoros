@@ -75,6 +75,6 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           context: .
-          file: Dockerfile-app
+          file: Dockerfile
           push: true
           tags: mescalera2787/msdwhtoros:latestV1
