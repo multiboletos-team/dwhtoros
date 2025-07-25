@@ -12,6 +12,7 @@ public class Venta {
 	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+	
     private int orderId;
     private int eventId;
     private String eventDescription;
