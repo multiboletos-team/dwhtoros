@@ -1,22 +1,31 @@
-  deploy:
-    if: ${{ github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
-    needs: docker-build
+#!/bin/bash
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+start=$(date +"%s")
 
-      - name: Add SSH private key
-        run: |
-          echo "${{ secrets.SERVER_KEY }}" > key.txt
-          chmod 600 key.txt
+ssh -p ${SERVER_PORT} ${SERVER_USER}@${SERVER_HOST} -i key.txt -t -t -o StrictHostKeyChecking=no << 'ENDSSH'
+docker pull mescalera2787/msdwhtoros:latest
 
-      - name: Deploy the application
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}   # Ej. 18.211.109.174
-          SERVER_PORT: ${{ secrets.SERVER_PORT }}   # Ej. 22
-          SERVER_USER: ${{ secrets.SERVER_USER }}   # Ej. ec2-user
-        run: |
-          set -e
-          ./deploy.sh
+CONTAINER_NAME=dhwtoros
+if [ "$(docker ps -qa -f name=$CONTAINER_NAME)" ]; then
+    if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
+        echo "Container is running -> stopping it..."
+        docker stop $CONTAINER_NAME;
+    fi
+fi
+
+docker run -d --rm -p 8080:8080 --name $CONTAINER_NAME tericcabrel/bmi:latest
+
+exit
+ENDSSH
+
+if [ $? -eq 0 ]; then
+  exit 0
+else
+  exit 1
+fi
+
+end=$(date +"%s")
+
+diff=$(($end - $start))
+
+echo "Deployed in : ${diff}s"
