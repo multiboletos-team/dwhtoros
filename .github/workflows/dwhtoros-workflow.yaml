@@ -88,8 +88,8 @@ jobs:
 
       - name: Add Server key
         run: |
-          echo "${{ secrets.SERVER_KEY }}" > key.pem
-          chmod 600 key.pem
+          echo "${{ secrets.SERVER_KEY }}" > github_actions_key.pem
+          chmod 600 github_actions_key.pem
 
       - name: Add execute permission to deploy script
         run: chmod +x deploy.sh
@@ -100,4 +100,11 @@ jobs:
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          ssh -o StrictHostKeyChecking=no -i key.pem $SERVER_USER@$SERVER_HOST "bash -s" < ./deploy.sh
+          ssh -o StrictHostKeyChecking=no -i github_actions_key.pem $SERVER_USER@$SERVER_HOST << 'EOF'
+            echo "🟢 Conexión exitosa con SSH"
+            cd /home/ec2-user/git/dwhtoros  # <- ajusta si tu proyecto se clona en otra ruta
+            docker stop msdwhtoros || true
+            docker rm msdwhtoros || true
+            docker pull mescalera2787/msdwhtoros:latestV1
+            docker run -d --name msdwhtoros -p 8080:8080 mescalera2787/msdwhtoros:latestV1
+          EOF
