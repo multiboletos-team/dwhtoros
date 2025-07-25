@@ -86,31 +86,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Debug Server Key
-        run: |
-          echo "${{ secrets.SERVER_KEY }}" > github_actions_key.pem
-          chmod 600 github_actions_key.pem
-
-          echo "🔐 Base64 de la llave privada (1 línea, segura para debug):"
-          base64 github_actions_key.pem
-
-          echo "🔎 Verificación de contenido de la llave privada (SHA-256):"
-          sha256sum github_actions_key.pem
-
       - name: Reconstruir clave desde base64
         run: |
           echo "${{ secrets.SERVER_KEY_B64 }}" | base64 -d > github_actions_key.pem
           chmod 600 github_actions_key.pem
-
-      - name: Add Server key
-        run: |
-          printf "%s" "${{ secrets.SERVER_KEY }}" > github_actions_key.pem
-          chmod 600 github_actions_key.pem
-
-      - name: Verify PEM formatting
-        run: |
-          head -n 2 github_actions_key.pem
-          tail -n 2 github_actions_key.pem
 
       - name: Add execute permission to deploy script
         run: chmod +x deploy.sh
