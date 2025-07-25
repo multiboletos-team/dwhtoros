@@ -31,7 +31,7 @@ jobs:
       
   docker-build:
     if: ${{ github.ref == 'refs/heads/dev' }}
-    runs-on: [self-hosted, amazon-linux-2023]
+    runs-on: self-hosted
     needs: project-build
     steps:
       - name: Checkout repository
