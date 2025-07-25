@@ -86,9 +86,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Reconstruir clave desde base64
+      - name: Save key to file properly
         run: |
-          echo "${{ secrets.SERVER_KEY_B64 }}" | base64 -d > github_actions_key.pem
+          printf "%s" "${{ secrets.SERVER_KEY }}" > github_actions_key.pem
           chmod 600 github_actions_key.pem
 
       - name: Add execute permission to deploy script
