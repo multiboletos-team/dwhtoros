@@ -97,6 +97,11 @@ jobs:
           echo "🔎 Verificación de contenido de la llave privada (SHA-256):"
           sha256sum github_actions_key.pem
 
+      - name: Reconstruir clave desde base64
+        run: |
+          echo "${{ secrets.SERVER_KEY_B64 }}" | base64 -d > github_actions_key.pem
+          chmod 600 github_actions_key.pem
+
       - name: Add Server key
         run: |
           printf "%s" "${{ secrets.SERVER_KEY }}" > github_actions_key.pem
