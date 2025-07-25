@@ -80,24 +80,24 @@ jobs:
           tags: mescalera2787/msdwhtoros:latestV1
 
   deploy:
-  if: ${{ github.ref == 'refs/heads/dev' }}
-  runs-on: ubuntu-latest
-  needs: docker-build
-  steps:
-    - uses: actions/checkout@v3
+    if: ${{ github.ref == 'refs/heads/dev' }}
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - uses: actions/checkout@v3
 
-    - name: Add Server key
-      run: |
-        echo "${{ secrets.SERVER_KEY }}" > key.pem
-        chmod 600 key.pem
+      - name: Add Server key
+        run: |
+          echo "${{ secrets.SERVER_KEY }}" > key.pem
+          chmod 600 key.pem
 
-    - name: Add execute permission to deploy script
-      run: chmod +x deploy.sh
+      - name: Add execute permission to deploy script
+        run: chmod +x deploy.sh
 
-    - name: Deploy the application
-      env:
-        SERVER_HOST: ${{ secrets.SERVER_HOST }}
-        SERVER_PORT: ${{ secrets.SERVER_PORT }}
-        SERVER_USER: ${{ secrets.SERVER_USER }}
-      run: |
-        ssh -o StrictHostKeyChecking=no -i key.pem $SERVER_USER@$SERVER_HOST "bash -s" < ./deploy.sh
+      - name: Deploy the application
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem $SERVER_USER@$SERVER_HOST "bash -s" < ./deploy.sh
