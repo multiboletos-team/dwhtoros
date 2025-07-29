@@ -78,3 +78,33 @@ jobs:
           file: Dockerfile
           push: true
           tags: mescalera2787/msdwhtoros:latestV1
+
+  deploy:
+    if: ${{ github.ref == 'refs/heads/dev' }}
+    runs-on: ubuntu-latest
+    needs: docker-build
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Save key to file properly
+        run: |
+          printf "%s" "${{ secrets.SERVER_KEY }}" > github_actions_key.pem
+          chmod 600 github_actions_key.pem
+
+      - name: Add execute permission to deploy script
+        run: chmod +x deploy.sh
+
+      - name: Deploy the application
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i github_actions_key.pem $SERVER_USER@$SERVER_HOST << 'EOF'
+            echo "🟢 Conexión exitosa con SSH"
+            cd /home/ec2-user/git/dwhtoros  # <- ajusta si tu proyecto se clona en otra ruta
+            docker stop msdwhtoros || true
+            docker rm msdwhtoros || true
+            docker pull mescalera2787/msdwhtoros:latestV1
+            docker run -d --name msdwhtoros -p 8080:8080 mescalera2787/msdwhtoros:latestV1
+          EOF
