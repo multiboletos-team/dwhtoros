@@ -30,6 +30,7 @@ public class VentaService {
         venta.setEventId(dto.getEventId());
         venta.setEventDescription(dto.getEventDescription());
         venta.setSeriesGame(dto.getSeriesGame());
+        venta.setItemsTotal(dto.getItemsTotal());
         venta.setTotalExTax(dto.getTotalExTax());
         venta.setTotalIncTax(dto.getTotalIncTax());
         venta.setTotalDiscount(dto.getTotalDiscount());
