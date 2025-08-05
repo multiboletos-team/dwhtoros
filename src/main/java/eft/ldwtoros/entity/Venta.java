@@ -17,7 +17,8 @@ public class Venta {
     private int orderId;
 	
     private int eventId;
-    private String eventDescription;
+    private int itemsTotal;
+	private String eventDescription;
     private String seriesGame;
     private BigDecimal totalExTax;
     private BigDecimal totalIncTax;
@@ -171,6 +172,15 @@ public class Venta {
 	public void setDetalles(List<DetalleVenta> detalles) {
 		this.detalles = detalles;
 	}
+	
+	public int getItemsTotal() {
+		return itemsTotal;
+	}
+
+	public void setItemsTotal(int itemsTotal) {
+		this.itemsTotal = itemsTotal;
+	}
+
 
 	public Long getId() {
 		return id;

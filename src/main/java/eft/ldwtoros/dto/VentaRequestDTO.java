@@ -15,8 +15,11 @@ public class VentaRequestDTO {
 
     @JsonProperty("event_description")
     private String eventDescription;
+    
+    @JsonProperty("items_total")
+    private int itemsTotal;
 
-    @JsonProperty("series_game")
+	@JsonProperty("series_game")
     private String seriesGame;
 
     @JsonProperty("total_ex_tax")
@@ -101,4 +104,6 @@ public class VentaRequestDTO {
     public String getFechaVenta() { return fechaVenta; }
     public String getOrderSource() { return orderSource; }
     public BigDecimal getStoreCreditAmount() { return storeCreditAmount; }
+    public int getItemsTotal() { return itemsTotal; }
+    public void setItemsTotal(int itemsTotal) { this.itemsTotal = itemsTotal; }
 }
