@@ -12,7 +12,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/ventas")
@@ -37,12 +40,42 @@ public class VentaController {
         return ventaRepository.save(venta);
     }
 
+    @Deprecated
     @PutMapping("/{id}/cancelar")
-    public Venta cancelarVenta(@PathVariable Long id) {
+    public Venta cancelarVentaOld(@PathVariable Long id) {
         Venta venta = ventaRepository.findById(id).orElseThrow();
         venta.setCancelada(true);
         return ventaRepository.save(venta);
     }
+    
+    @PutMapping("/cancelar/{orderId}")
+    public ResponseEntity<Map<String, Object>> cancelarVenta(@PathVariable Long orderId) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            Optional<Venta> optionalVenta = ventaRepository.findByOrderId(orderId);
+
+            if (optionalVenta.isEmpty()) {
+                response.put("codigo", 404);
+                response.put("mensaje", "Venta no encontrada para el orderId: " + orderId);
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+
+            Venta venta = optionalVenta.get();
+            venta.setCancelada(true);
+            ventaRepository.save(venta);
+
+            response.put("codigo", 200);
+            response.put("mensaje", "Venta cancelada correctamente");
+            response.put("orderId", orderId);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            response.put("codigo", 500);
+            response.put("mensaje", "Error interno al cancelar la venta: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     
     
     /**
