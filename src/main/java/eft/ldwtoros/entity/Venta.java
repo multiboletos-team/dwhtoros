@@ -13,7 +13,9 @@ public class Venta {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 	
+	@Column(name = "order_id", unique = true, nullable = false)
     private int orderId;
+	
     private int eventId;
     private String eventDescription;
     private String seriesGame;

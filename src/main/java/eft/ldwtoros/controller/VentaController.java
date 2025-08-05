@@ -3,15 +3,21 @@ package eft.ldwtoros.controller;
 
 import eft.ldwtoros.dto.ApiResponse;
 import eft.ldwtoros.dto.VentaRequestDTO;
+import eft.ldwtoros.entity.ErrorLog;
 import eft.ldwtoros.entity.Venta;
+import eft.ldwtoros.repository.ErrorLogRepository;
 import eft.ldwtoros.repository.VentaRepository;
 import eft.ldwtoros.service.VentaService;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.StringWriter;
+import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +35,8 @@ public class VentaController {
 
     @Autowired
     private VentaRepository ventaRepository;
+    @Autowired
+    private ErrorLogRepository errorLogRepository;
 
     @GetMapping
     public List<Venta> listarVentas() {
@@ -91,7 +99,7 @@ public class VentaController {
     }
     
     @PostMapping("/boletomovil")
-    public ResponseEntity<ApiResponse> procesarVentaV2(@RequestBody VentaRequestDTO dto) {
+    public ResponseEntity<ApiResponse> procesarVentaV2(@RequestBody VentaRequestDTO dto, HttpServletRequest request) {
         try {
             ventaService.insertarVenta(dto);
 
@@ -112,7 +120,30 @@ public class VentaController {
             );
             return ResponseEntity.badRequest().body(response);
 
-        } catch (Exception e) {
+        } catch (DataIntegrityViolationException e) {
+        	// Captura traza completa para bitácora
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            String fullStackTrace = sw.toString();
+
+            // Guardar en bitácora
+            errorLogRepository.save(new ErrorLog(
+                request.getRequestURI(),
+                request.getMethod(),
+                String.valueOf(dto.getOrderId()),           // ✅ Ahora puedes pasar el Long
+                "Order ID duplicado",
+                fullStackTrace.substring(0, 1995)
+            ));
+        	
+            // Violación de UNIQUE -> 400
+            ApiResponse response = new ApiResponse(
+                400,
+                "El order_id " + dto.getOrderId() + " ya existe. No se puede duplicar.",
+                null
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+
+        }catch (Exception e) {
             // Manejo de errores inesperados -> 500
             ApiResponse response = new ApiResponse(
                 500,
