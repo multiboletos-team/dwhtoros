@@ -3,8 +3,10 @@ package eft.ldwtoros.controller;
 
 import eft.ldwtoros.dto.ApiResponse;
 import eft.ldwtoros.dto.VentaRequestDTO;
+import eft.ldwtoros.entity.DetalleVenta;
 import eft.ldwtoros.entity.ErrorLog;
 import eft.ldwtoros.entity.Venta;
+import eft.ldwtoros.repository.DetalleVentaRepository;
 import eft.ldwtoros.repository.ErrorLogRepository;
 import eft.ldwtoros.repository.VentaRepository;
 import eft.ldwtoros.service.VentaService;
@@ -12,16 +14,19 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.StringWriter;
+import java.time.LocalDate;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/ventas")
@@ -36,6 +41,8 @@ public class VentaController {
     @Autowired
     private VentaRepository ventaRepository;
     @Autowired
+    private DetalleVentaRepository detalleVentaRepository;
+    @Autowired
     private ErrorLogRepository errorLogRepository;
 
     @GetMapping
@@ -47,6 +54,42 @@ public class VentaController {
     public Venta crearVenta(@RequestBody Venta venta) {
         return ventaRepository.save(venta);
     }
+    
+    @GetMapping("/ventas")
+    public ResponseEntity<ApiResponse> consultarVentas(
+            @RequestParam(required = false) Long orderId,
+            @RequestParam(required = false) Boolean cancelada,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate fechaVenta
+    ) {
+        try {
+            List<Venta> ventas = ventaRepository.findAll().stream()
+                    .filter(v -> orderId == null || v.getOrderId().equals(orderId))
+                    .filter(v -> cancelada == null || v.isCancelada())
+                    .filter(v -> fechaVenta == null || v.getFechaVenta().toLocalDate().equals(fechaVenta))
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(new ApiResponse(200, "Consulta de ventas exitosa", ventas));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(500, "Error al consultar ventas: " + e.getMessage(), null));
+        }
+    }
+    
+    @GetMapping("/ventas/{ventaId}/detalles")
+    public ResponseEntity<ApiResponse> consultarDetallePorVenta(@PathVariable Long ventaId) {
+        try {
+            List<DetalleVenta> detalles = detalleVentaRepository.findByVentaId(ventaId);
+
+            return ResponseEntity.ok(new ApiResponse(200, "Consulta de detalles exitosa", detalles));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(500, "Error al consultar detalle de venta: " + e.getMessage(), null));
+        }
+    }
+
+
 
     @Deprecated
     @PutMapping("/{id}/cancelar")
@@ -144,6 +187,20 @@ public class VentaController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
 
         }catch (Exception e) {
+        	// Captura traza completa para bitácora
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            String fullStackTrace = sw.toString();
+
+            // Guardar en bitácora
+            errorLogRepository.save(new ErrorLog(
+                request.getRequestURI(),
+                request.getMethod(),
+                String.valueOf(dto.getOrderId()),           // ✅ Ahora puedes pasar el Long
+                "Order ID duplicado",
+                fullStackTrace.substring(0, 1995)
+            ));
+            
             // Manejo de errores inesperados -> 500
             ApiResponse response = new ApiResponse(
                 500,

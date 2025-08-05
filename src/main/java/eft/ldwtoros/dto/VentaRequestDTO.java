@@ -8,7 +8,7 @@ import java.util.List;
 public class VentaRequestDTO {
 
     @JsonProperty("order_id")
-    private int orderId;
+    private Long orderId;
 
     @JsonProperty("event_id")
     private int eventId;
@@ -91,7 +91,7 @@ public class VentaRequestDTO {
         return products;
     }
 
-    public int getOrderId() { return orderId; }
+    public Long getOrderId() { return orderId; }
     public int getEventId() { return eventId; }
     public String getEventDescription() { return eventDescription; }
     public String getSeriesGame() { return seriesGame; }

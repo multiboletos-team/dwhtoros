@@ -14,7 +14,7 @@ public class Venta {
     private Long id;
 	
 	@Column(name = "order_id", unique = true, nullable = false)
-    private int orderId;
+    private Long orderId;
 	
     private int eventId;
     private int itemsTotal;
@@ -37,11 +37,11 @@ public class Venta {
     private List<DetalleVenta> detalles;
 
     // Getters y setters
-    public int getOrderId() {
+    public Long getOrderId() {
 		return orderId;
 	}
 
-	public void setOrderId(int orderId) {
+	public void setOrderId(Long orderId) {
 		this.orderId = orderId;
 	}
 
