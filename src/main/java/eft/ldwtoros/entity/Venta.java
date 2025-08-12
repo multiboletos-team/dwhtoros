@@ -13,6 +13,7 @@ public class Venta {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 	
+//	@Id
 	@Column(name = "order_id", unique = true, nullable = false)
     private Long orderId;
 	
@@ -31,9 +32,9 @@ public class Venta {
     private LocalDateTime fechaVenta;
     private String emailCliente;
     private String telefonoCliente;
-    private boolean cancelada = false;
+    private boolean cancel = false;
 
-    @OneToMany(mappedBy = "venta", cascade = CascadeType.ALL, orphanRemoval = true)
+	@OneToMany(mappedBy = "venta", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DetalleVenta> detalles;
 
     // Getters y setters
@@ -157,12 +158,12 @@ public class Venta {
 		this.telefonoCliente = telefonoCliente;
 	}
 
-	public boolean isCancelada() {
-		return cancelada;
+    public boolean isCancel() {
+		return cancel;
 	}
 
-	public void setCancelada(boolean cancelada) {
-		this.cancelada = cancelada;
+	public void setCancel(boolean cancel) {
+		this.cancel = cancel;
 	}
 
 	public List<DetalleVenta> getDetalles() {
@@ -180,7 +181,6 @@ public class Venta {
 	public void setItemsTotal(int itemsTotal) {
 		this.itemsTotal = itemsTotal;
 	}
-
 
 	public Long getId() {
 		return id;

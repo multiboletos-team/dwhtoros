@@ -2,6 +2,7 @@
 package eft.ldwtoros.controller;
 
 import eft.ldwtoros.dto.ApiResponse;
+import eft.ldwtoros.dto.CancelarItemRequest;
 import eft.ldwtoros.dto.VentaRequestDTO;
 import eft.ldwtoros.entity.DetalleVenta;
 import eft.ldwtoros.entity.ErrorLog;
@@ -19,13 +20,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.StringWriter;
 import java.time.LocalDate;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -37,7 +40,9 @@ public class VentaController {
     public VentaController(VentaService ventaService) {
         this.ventaService = ventaService;
     }
-
+    
+    @Autowired
+    private ObjectMapper objectMapper; // Spring la inyecta automáticamente
     @Autowired
     private VentaRepository ventaRepository;
     @Autowired
@@ -64,7 +69,7 @@ public class VentaController {
         try {
             List<Venta> ventas = ventaRepository.findAll().stream()
                     .filter(v -> orderId == null || v.getOrderId().equals(orderId))
-                    .filter(v -> cancelada == null || v.isCancelada())
+                    .filter(v -> cancelada == null || v.isCancel())
                     .filter(v -> fechaVenta == null || v.getFechaVenta().toLocalDate().equals(fechaVenta))
                     .collect(Collectors.toList());
 
@@ -77,9 +82,9 @@ public class VentaController {
     }
     
     @GetMapping("/ventas/{ventaId}/detalles")
-    public ResponseEntity<ApiResponse> consultarDetallePorVenta(@PathVariable Long ventaId) {
+    public ResponseEntity<ApiResponse> consultarDetallePorVenta(@PathVariable Long OrderId) {
         try {
-            List<DetalleVenta> detalles = detalleVentaRepository.findByVentaId(ventaId);
+            List<DetalleVenta> detalles = detalleVentaRepository.findByVentaOrderId(OrderId);
 
             return ResponseEntity.ok(new ApiResponse(200, "Consulta de detalles exitosa", detalles));
 
@@ -95,39 +100,117 @@ public class VentaController {
     @PutMapping("/{id}/cancelar")
     public Venta cancelarVentaOld(@PathVariable Long id) {
         Venta venta = ventaRepository.findById(id).orElseThrow();
-        venta.setCancelada(true);
+        venta.setCancel(true);
         return ventaRepository.save(venta);
     }
     
     @PutMapping("/cancelar/{orderId}")
-    public ResponseEntity<Map<String, Object>> cancelarVenta(@PathVariable Long orderId) {
+    public ResponseEntity<Map<String, Object>> cancelarVenta(@PathVariable Long orderId, HttpServletRequest httpReq) {
         Map<String, Object> response = new HashMap<>();
         try {
-            Optional<Venta> optionalVenta = ventaRepository.findByOrderId(orderId);
-
-            if (optionalVenta.isEmpty()) {
-                response.put("codigo", 404);
-                response.put("mensaje", "Venta no encontrada para el orderId: " + orderId);
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-            }
-
-            Venta venta = optionalVenta.get();
-            venta.setCancelada(true);
-            ventaRepository.save(venta);
+            // ahora usamos el servicio que también cancela los detalles
+            ventaService.cancelarVentaTotalPorOrderId(orderId);
 
             response.put("codigo", 200);
             response.put("mensaje", "Venta cancelada correctamente");
             response.put("orderId", orderId);
             return ResponseEntity.ok(response);
 
+        } catch (IllegalArgumentException e) {
+            response.put("codigo", 404);
+            response.put("mensaje", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+
         } catch (Exception e) {
+            String rawBody = String.format(
+                    "{\"orderId\":%s}",
+                    orderId
+                );
+        	
+        	// Captura traza completa para bitácora
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            String fullStackTrace = sw.toString();
+
+            // Guardar en bitácora
+            errorLogRepository.save(new ErrorLog(
+            	httpReq.getRequestURI(),
+            	httpReq.getMethod(),
+                rawBody,
+                String.valueOf(orderId),           // ✅ Ahora puedes pasar el Long
+                "Order ID duplicado",
+                fullStackTrace.substring(0, 1995)
+            ));
             response.put("codigo", 500);
             response.put("mensaje", "Error interno al cancelar la venta: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
-
     
+    @PutMapping("/cancelar/parcial")
+    public ResponseEntity<ApiResponse> cancelarParcial(
+            @RequestBody CancelarItemRequest req,
+            HttpServletRequest httpReq) {
+
+        try {
+            if (req.getOrderId() == null ||
+                req.getSecction() == null || req.getSecction().isBlank() ||
+                req.getRow() == null || req.getRow().isBlank() ||
+                req.getSeat() == null || req.getSeat().isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body(new ApiResponse(400, "Parámetros incompletos: orderId, secction, row y seat son obligatorios", null));
+            }
+
+            ventaService.cancelarItemPorOrderYAsiento(
+                    req.getOrderId(), req.getSecction().trim(), req.getRow().trim(), req.getSeat().trim());
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("orderId", req.getOrderId());
+            payload.put("secction", req.getSecction());
+            payload.put("row", req.getRow());
+            payload.put("seat", req.getSeat());
+
+            return ResponseEntity.ok(new ApiResponse(200, "Asiento cancelado correctamente", payload));
+
+        } catch (IllegalArgumentException iae) {
+            // 404 semántico
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("orderId", req.getOrderId());
+            payload.put("secction", req.getSecction());
+            payload.put("row", req.getRow());
+            payload.put("seat", req.getSeat());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponse(404, iae.getMessage(), payload));
+
+        } catch (Exception e) {
+            // Guardar el JSON request recibido como respaldo
+            try {
+                String rawBody = String.format(
+                    "{\"orderId\":%s,\"secction\":\"%s\",\"row\":\"%s\",\"seat\":\"%s\"}",
+                    req.getOrderId(), req.getSecction(), req.getRow(), req.getSeat()
+                );
+
+            	// Captura traza completa para bitácora
+                StringWriter sw = new StringWriter();
+                e.printStackTrace(new PrintWriter(sw));
+                String fullStackTrace = sw.toString();
+
+                // Guardar en bitácora
+                errorLogRepository.save(new ErrorLog(
+                	httpReq.getRequestURI(),
+                	httpReq.getMethod(),
+                    rawBody,
+                    String.valueOf(req.getOrderId()),           // ✅ Ahora puedes pasar el Long
+                    "Order ID duplicado",
+                    fullStackTrace.substring(0, 1995)
+                ));
+                //errorLogRepository.save(log);
+            } catch (Exception ignored) {}
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(500, "Error al cancelar asiento: " + e.getMessage(), null));
+        }
+    }
     
     /**
      * @deprecated
@@ -142,7 +225,9 @@ public class VentaController {
     }
     
     @PostMapping("/boletomovil")
-    public ResponseEntity<ApiResponse> procesarVentaV2(@RequestBody VentaRequestDTO dto, HttpServletRequest request) {
+    public ResponseEntity<ApiResponse> procesarVentaV2(@RequestBody VentaRequestDTO dto, HttpServletRequest request) throws JsonProcessingException {
+        // Convertir DTO a String JSON
+        String jsonRequest = objectMapper.writeValueAsString(dto);
         try {
             ventaService.insertarVenta(dto);
 
@@ -173,6 +258,7 @@ public class VentaController {
             errorLogRepository.save(new ErrorLog(
                 request.getRequestURI(),
                 request.getMethod(),
+                jsonRequest.substring(0, Math.min(jsonRequest.length(), 2000)),
                 String.valueOf(dto.getOrderId()),           // ✅ Ahora puedes pasar el Long
                 "Order ID duplicado",
                 fullStackTrace.substring(0, 1995)
@@ -196,6 +282,7 @@ public class VentaController {
             errorLogRepository.save(new ErrorLog(
                 request.getRequestURI(),
                 request.getMethod(),
+                jsonRequest.substring(0, Math.min(jsonRequest.length(), 2000)),
                 String.valueOf(dto.getOrderId()),           // ✅ Ahora puedes pasar el Long
                 "Order ID duplicado",
                 fullStackTrace.substring(0, 1995)

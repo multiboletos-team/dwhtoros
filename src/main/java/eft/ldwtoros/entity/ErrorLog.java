@@ -19,8 +19,11 @@ public class ErrorLog {
 
     @Column(length = 50)
     private String httpMethod;
+    
+    @Column(length = 5000)
+    private String httpRequest;
 
-    @Column(length = 255)
+	@Column(length = 255)
     private String orderId;
 
     @Column(length = 1000)
@@ -33,18 +36,19 @@ public class ErrorLog {
     public ErrorLog() {}
 
  // Constructor que acepta Strings
-    public ErrorLog(String endpoint, String httpMethod, String orderId, String errorMessage, String stackTrace) {
+    public ErrorLog(String endpoint, String httpMethod, String httpRequest, String orderId, String errorMessage, String stackTrace) {
         this.timestamp = LocalDateTime.now();
         this.endpoint = endpoint;
         this.httpMethod = httpMethod;
+        this.httpRequest = httpRequest;
         this.orderId = orderId;
         this.errorMessage = errorMessage;
         this.stackTrace = stackTrace;
     }
 
     // Sobrecarga para aceptar Long
-    public ErrorLog(String endpoint, String httpMethod, Long orderId, String errorMessage, String stackTrace) {
-        this(endpoint, httpMethod,
+    public ErrorLog(String endpoint, String httpMethod,  String httpRequest, Long orderId, String errorMessage, String stackTrace) {
+        this(endpoint, httpMethod, httpRequest,
              orderId != null ? orderId.toString() : null,  // Conversión aquí
              errorMessage,
              stackTrace);
@@ -58,6 +62,8 @@ public class ErrorLog {
     public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
     public String getHttpMethod() { return httpMethod; }
     public void setHttpMethod(String httpMethod) { this.httpMethod = httpMethod; }
+    public String getHttpRequest() { return httpRequest; }
+	public void setHttpRequest(String httpRequest) { this.httpRequest = httpRequest; }
     public String getOrderId() { return orderId; }
     public void setOrderId(String orderId) { this.orderId = orderId; }
     public String getErrorMessage() { return errorMessage; }

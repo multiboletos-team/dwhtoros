@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @Service
 public class VentaService {
@@ -55,28 +56,73 @@ public class VentaService {
             DetalleVenta detalle = new DetalleVenta();
 
             detalle.setSku(producto.getSku());
-            detalle.setTipoProducto(producto.getTypeProduct());
-            detalle.setPrecioSinIva(producto.getPriceExTax());
-            detalle.setPrecioConIva(producto.getPriceIncTax());
+            detalle.setTypeProduct(producto.getTypeProduct());
+            detalle.setPriceExTax(producto.getPriceExTax());
+            detalle.setPriceIncTax(producto.getPriceIncTax());
 
             if (!producto.getAppliedDiscounts().isEmpty()) {
                 var descuento = producto.getAppliedDiscounts().get(0);
-                detalle.setDescuentoAplicado(BigDecimal.valueOf(descuento.getAmount()));
-                detalle.setPorcentajeDescuento(BigDecimal.valueOf(descuento.getPorcent()));
+                detalle.setDiscountAplied(BigDecimal.valueOf(descuento.getAmount()));
+                detalle.setPorcentDiscount(BigDecimal.valueOf(descuento.getPorcent()));
             }
 
             var desc = producto.getDescription();
-            detalle.setZona(desc.getZona());
-            detalle.setSeccion(desc.getSeccion());
-            detalle.setFila(desc.getFila());
-            detalle.setAsiento(desc.getAsiento());
+            detalle.setZone(desc.getZona());
+            detalle.setSecction(desc.getSeccion());
+            detalle.setRow(desc.getFila());
+            detalle.setSeat(desc.getAsiento());
 
             var info = producto.getDetails();
-            detalle.setNombreComprador(info.getName());
-            detalle.setDireccion(info.getSeasonPurchaseAddress());
+            detalle.setNameClient(info.getName());
+            detalle.setAddress(info.getSeasonPurchaseAddress());
 
             detalle.setVenta(venta);
             detalleVentaRepository.save(detalle);
         }
+    }
+    
+
+    @Transactional
+    public void cancelarVentaTotalPorOrderId(Long orderId) {
+        Venta venta = ventaRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Venta no encontrada para orderId: " + orderId));
+
+        // Marcar venta cancelada
+        venta.setCancel(true);
+        ventaRepository.save(venta);
+
+        // Marcar todos los detalles cancelados
+        List<DetalleVenta> detalles = detalleVentaRepository.findByVentaOrderId(orderId);
+        for (DetalleVenta d : detalles) {
+            d.setCancel(true);
+        }
+        detalleVentaRepository.saveAll(detalles);
+    }
+
+    @Transactional
+    public boolean cancelarItemPorOrderYAsiento(Long orderId, String secction, String row, String seat) {
+        Venta venta = ventaRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Venta no encontrada para orderId: " + orderId));
+
+        DetalleVenta detalle = detalleVentaRepository
+                .findFirstByVentaOrderIdAndSecctionAndRowAndSeat(orderId, secction, row, seat)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No se encontró el asiento (" + secction + ", " + row + ", " + seat + ") en la orden: " + orderId));
+
+        if (!detalle.isCancel()) {
+            detalle.setCancel(true);
+            detalleVentaRepository.save(detalle);
+        }
+
+        // Si TODOS los detalles ya están cancelados, marca la venta como cancelada
+        boolean todosCancelados = detalleVentaRepository.findByVentaOrderId(orderId)
+                .stream().allMatch(DetalleVenta::isCancel);
+
+        if (todosCancelados && !venta.isCancel()) {
+            venta.setCancel(true);
+            ventaRepository.save(venta);
+        }
+
+        return true;
     }
 }

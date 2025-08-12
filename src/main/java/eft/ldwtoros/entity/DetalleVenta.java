@@ -11,35 +11,36 @@ public class DetalleVenta {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+	@ManyToOne
     @JoinColumn(name = "venta_id")
     private Venta venta;
 
-    private String tipoProducto;
-    private int sku;
-    private String zona;
-    private String seccion;
-    private String fila;
-    private String asiento;
-    private String nombreComprador;
-    private String direccion;
-    private BigDecimal precioSinIva;
-    private BigDecimal precioConIva;
-    private BigDecimal descuentoAplicado;
-    private BigDecimal porcentajeDescuento;
+    private String typeProduct;
+	private int sku;
+    private String zone;
+	private String secction;
+	private String row;
+	private String seat;
+	private String nameClient;
+	private String address;
+	private BigDecimal priceExTax;
+    private BigDecimal priceIncTax;
+    private BigDecimal discountAplied;
+	private BigDecimal porcentDiscount;
+	private boolean cancel = false;
 
-    // Getters y setters
+	// Getters y setters
     public Venta getVenta() {
 		return venta;
 	}
 	public void setVenta(Venta venta) {
 		this.venta = venta;
 	}
-	public String getTipoProducto() {
-		return tipoProducto;
+    public String getTypeProduct() {
+		return typeProduct;
 	}
-	public void setTipoProducto(String tipoProducto) {
-		this.tipoProducto = tipoProducto;
+	public void setTypeProduct(String typeProduct) {
+		this.typeProduct = typeProduct;
 	}
 	public int getSku() {
 		return sku;
@@ -47,67 +48,73 @@ public class DetalleVenta {
 	public void setSku(int sku) {
 		this.sku = sku;
 	}
-	public String getZona() {
-		return zona;
+    public String getZone() {
+		return zone;
 	}
-	public void setZona(String zona) {
-		this.zona = zona;
+	public void setZone(String zone) {
+		this.zone = zone;
 	}
-	public String getSeccion() {
-		return seccion;
+    public String getSecction() {
+		return secction;
 	}
-	public void setSeccion(String seccion) {
-		this.seccion = seccion;
+	public void setSecction(String secction) {
+		this.secction = secction;
 	}
-	public String getFila() {
-		return fila;
+    public String getRow() {
+		return row;
 	}
-	public void setFila(String fila) {
-		this.fila = fila;
+	public void setRow(String row) {
+		this.row = row;
 	}
-	public String getAsiento() {
-		return asiento;
+    public String getSeat() {
+		return seat;
 	}
-	public void setAsiento(String asiento) {
-		this.asiento = asiento;
+	public void setSeat(String seat) {
+		this.seat = seat;
 	}
-	public String getNombreComprador() {
-		return nombreComprador;
+    public String getNameClient() {
+		return nameClient;
 	}
-	public void setNombreComprador(String nombreComprador) {
-		this.nombreComprador = nombreComprador;
+	public void setNameClient(String nameClient) {
+		this.nameClient = nameClient;
 	}
-	public String getDireccion() {
-		return direccion;
+	public String getAddress() {
+		return address;
 	}
-	public void setDireccion(String direccion) {
-		this.direccion = direccion;
+	public void setAddress(String address) {
+		this.address = address;
 	}
-	public BigDecimal getPrecioSinIva() {
-		return precioSinIva;
+	public BigDecimal getPriceExTax() {
+		return priceExTax;
 	}
-	public void setPrecioSinIva(BigDecimal precioSinIva) {
-		this.precioSinIva = precioSinIva;
+	public void setPriceExTax(BigDecimal priceExTax) {
+		this.priceExTax = priceExTax;
 	}
-	public BigDecimal getPrecioConIva() {
-		return precioConIva;
+	public BigDecimal getPriceIncTax() {
+		return priceIncTax;
 	}
-	public void setPrecioConIva(BigDecimal precioConIva) {
-		this.precioConIva = precioConIva;
+	public void setPriceIncTax(BigDecimal priceIncTax) {
+		this.priceIncTax = priceIncTax;
 	}
-	public BigDecimal getDescuentoAplicado() {
-		return descuentoAplicado;
+    public BigDecimal getDiscountAplied() {
+		return discountAplied;
 	}
-	public void setDescuentoAplicado(BigDecimal descuentoAplicado) {
-		this.descuentoAplicado = descuentoAplicado;
+	public void setDiscountAplied(BigDecimal discountAplied) {
+		this.discountAplied = discountAplied;
 	}
-	public BigDecimal getPorcentajeDescuento() {
-		return porcentajeDescuento;
+    public BigDecimal getPorcentDiscount() {
+		return porcentDiscount;
 	}
-	public void setPorcentajeDescuento(BigDecimal porcentajeDescuento) {
-		this.porcentajeDescuento = porcentajeDescuento;
+	public void setPorcentDiscount(BigDecimal porcentDiscount) {
+		this.porcentDiscount = porcentDiscount;
 	}
-	public Long getId() {
+	public boolean isCancel() {
+		return cancel;
+	}
+	public void setCancel(boolean cancel) {
+		this.cancel = cancel;
+	}
+    public Long getId() {
 		return id;
 	}
 }
