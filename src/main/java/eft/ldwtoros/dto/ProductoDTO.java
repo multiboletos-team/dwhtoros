@@ -8,7 +8,7 @@ import java.util.List;
 public class ProductoDTO {
 
     @JsonProperty("sku")
-    private int sku;
+    private Long sku;
 
     @JsonProperty("type_product")
     private String typeProduct;
@@ -29,7 +29,7 @@ public class ProductoDTO {
     private List<DiscountDTO> appliedDiscounts;
 
     // Getters
-    public int getSku() { return sku; }
+    public Long getSku() { return sku; }
     public String getTypeProduct() { return typeProduct; }
     public BigDecimal getPriceExTax() { return priceExTax; }
     public BigDecimal getPriceIncTax() { return priceIncTax; }

@@ -15,6 +15,6 @@ public interface DetalleVentaRepository extends JpaRepository<DetalleVenta, Long
 	 List<DetalleVenta> findByVentaOrderId(Long orderId);
 	 
 	    Optional<DetalleVenta> findFirstByVentaOrderIdAndSecctionAndRowAndSeat(
-	            Long orderId, String secction, String row, String seat
+	            Long orderId, String secction, String row, Long seat
 	        );
 }

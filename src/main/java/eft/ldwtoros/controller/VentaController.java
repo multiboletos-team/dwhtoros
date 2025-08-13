@@ -3,6 +3,8 @@ package eft.ldwtoros.controller;
 
 import eft.ldwtoros.dto.ApiResponse;
 import eft.ldwtoros.dto.CancelarItemRequest;
+import eft.ldwtoros.dto.DetalleVentaDTO;
+import eft.ldwtoros.dto.VentaDTO;
 import eft.ldwtoros.dto.VentaRequestDTO;
 import eft.ldwtoros.entity.DetalleVenta;
 import eft.ldwtoros.entity.ErrorLog;
@@ -50,51 +52,40 @@ public class VentaController {
     @Autowired
     private ErrorLogRepository errorLogRepository;
 
-    @GetMapping
-    public List<Venta> listarVentas() {
-        return ventaRepository.findAll();
-    }
 
-    @PostMapping
-    public Venta crearVenta(@RequestBody Venta venta) {
-        return ventaRepository.save(venta);
-    }
-    
-    @GetMapping("/ventas")
-    public ResponseEntity<ApiResponse> consultarVentas(
-            @RequestParam(required = false) Long orderId,
-            @RequestParam(required = false) Boolean cancelada,
-            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate fechaVenta
+    @GetMapping("/consulta")
+    public ResponseEntity<ApiResponse> listarVentas(
+            @RequestParam(name = "order_id", required = false) Long orderIdSnake,
+            @RequestParam(name = "orderId",  required = false) Long orderIdCamel,
+            @RequestParam(name = "fechaDesde", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaDesde,
+            @RequestParam(name = "fechaHasta", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaHasta,
+            @RequestParam(name = "fechaVenta", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaVenta,
+            @RequestParam(required = false) Boolean cancel
     ) {
-        try {
-            List<Venta> ventas = ventaRepository.findAll().stream()
-                    .filter(v -> orderId == null || v.getOrderId().equals(orderId))
-                    .filter(v -> cancelada == null || v.isCancel())
-                    .filter(v -> fechaVenta == null || v.getFechaVenta().toLocalDate().equals(fechaVenta))
-                    .collect(Collectors.toList());
+        Long orderId = (orderIdSnake != null) ? orderIdSnake : orderIdCamel;
 
-            return ResponseEntity.ok(new ApiResponse(200, "Consulta de ventas exitosa", ventas));
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse(500, "Error al consultar ventas: " + e.getMessage(), null));
+        // Compatibilidad: si pasaron fechaVenta, úsala como rango 1 día
+        if (fechaDesde == null && fechaHasta == null && fechaVenta != null) {
+            fechaDesde = fechaVenta;
+            fechaHasta = fechaVenta;
         }
-    }
-    
-    @GetMapping("/ventas/{ventaId}/detalles")
-    public ResponseEntity<ApiResponse> consultarDetallePorVenta(@PathVariable Long OrderId) {
-        try {
-            List<DetalleVenta> detalles = detalleVentaRepository.findByVentaOrderId(OrderId);
+        // Si solo mandan una de las dos, completa con la otra para "un solo día"
+        if (fechaDesde != null && fechaHasta == null) fechaHasta = fechaDesde;
+        if (fechaHasta != null && fechaDesde == null) fechaDesde = fechaHasta;
 
-            return ResponseEntity.ok(new ApiResponse(200, "Consulta de detalles exitosa", detalles));
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse(500, "Error al consultar detalle de venta: " + e.getMessage(), null));
-        }
+        List<VentaDTO> data = ventaService.buscarVentas(orderId, fechaDesde, fechaHasta, cancel);
+        return ResponseEntity.ok(new ApiResponse(200, "OK", data));
     }
 
-
+    // GET /api/v1/ventas/{order_id}/detalles  (DetalleVenta por order_id)
+    @GetMapping("/{order_id}/detalle")
+    public ResponseEntity<ApiResponse> listarDetalles(@PathVariable("order_id") Long orderId) {
+        List<DetalleVentaDTO> data = ventaService.listarDetallesPorOrderId(orderId);
+        return ResponseEntity.ok(new ApiResponse(200, "OK", data));
+    }
 
     @Deprecated
     @PutMapping("/{id}/cancelar")
@@ -153,16 +144,44 @@ public class VentaController {
             HttpServletRequest httpReq) {
 
         try {
+            // Validación: orderId, secction, row, seat
             if (req.getOrderId() == null ||
                 req.getSecction() == null || req.getSecction().isBlank() ||
                 req.getRow() == null || req.getRow().isBlank() ||
-                req.getSeat() == null || req.getSeat().isBlank()) {
+                req.getSeat() == null || req.getSeat() <= 0) {
+
                 return ResponseEntity.badRequest()
-                        .body(new ApiResponse(400, "Parámetros incompletos: orderId, secction, row y seat son obligatorios", null));
+                    .body(new ApiResponse(400,
+                        "Parámetros incompletos: orderId, secction, row y seat son obligatorios",
+                        null));
+            }
+            
+            // Si envían uno de los montos, exige ambos
+            if ( (req.getTotalExTax() != null || req.getTotalIncTax() != null)
+                 && (req.getTotalExTax() == null || req.getTotalIncTax() == null) ) {
+                return ResponseEntity.badRequest().body(
+                    new ApiResponse(400,
+                        "Si envías montos, totalExTax y totalIncTax son obligatorios ambos",
+                        null)
+                );
             }
 
+            // 1) Cancelar asiento
+            // Llama al servicio con tipos numéricos para secction y seat
             ventaService.cancelarItemPorOrderYAsiento(
-                    req.getOrderId(), req.getSecction().trim(), req.getRow().trim(), req.getSeat().trim());
+                    req.getOrderId(),
+                    req.getSecction(),
+                    req.getRow().trim(),
+                    req.getSeat());
+            
+            // 2) Actualizar montos de la venta (opcional)
+            if (req.getTotalExTax() != null && req.getTotalIncTax() != null) {
+                ventaService.actualizarTotalesVenta(
+                        req.getOrderId(),
+                        req.getTotalExTax(),
+                        req.getTotalIncTax()
+                );
+            }
 
             Map<String, Object> payload = new HashMap<>();
             payload.put("orderId", req.getOrderId());
@@ -173,7 +192,6 @@ public class VentaController {
             return ResponseEntity.ok(new ApiResponse(200, "Asiento cancelado correctamente", payload));
 
         } catch (IllegalArgumentException iae) {
-            // 404 semántico
             Map<String, Object> payload = new HashMap<>();
             payload.put("orderId", req.getOrderId());
             payload.put("secction", req.getSecction());
@@ -183,28 +201,28 @@ public class VentaController {
                     .body(new ApiResponse(404, iae.getMessage(), payload));
 
         } catch (Exception e) {
-            // Guardar el JSON request recibido como respaldo
             try {
+                // Construye el request crudo con números sin comillas
                 String rawBody = String.format(
-                    "{\"orderId\":%s,\"secction\":\"%s\",\"row\":\"%s\",\"seat\":\"%s\"}",
-                    req.getOrderId(), req.getSecction(), req.getRow(), req.getSeat()
+                    "{\"orderId\":%s,\"secction\":%s,\"row\":\"%s\",\"seat\":%s}",
+                    String.valueOf(req.getOrderId()),
+                    String.valueOf(req.getSecction()),
+                    req.getRow(),
+                    String.valueOf(req.getSeat())
                 );
 
-            	// Captura traza completa para bitácora
                 StringWriter sw = new StringWriter();
                 e.printStackTrace(new PrintWriter(sw));
                 String fullStackTrace = sw.toString();
 
-                // Guardar en bitácora
                 errorLogRepository.save(new ErrorLog(
-                	httpReq.getRequestURI(),
-                	httpReq.getMethod(),
+                    httpReq.getRequestURI(),
+                    httpReq.getMethod(),
                     rawBody,
-                    String.valueOf(req.getOrderId()),           // ✅ Ahora puedes pasar el Long
+                    String.valueOf(req.getOrderId()),
                     "Order ID duplicado",
-                    fullStackTrace.substring(0, 1995)
+                    fullStackTrace.substring(0, Math.min(fullStackTrace.length(), 1995))
                 ));
-                //errorLogRepository.save(log);
             } catch (Exception ignored) {}
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

@@ -14,10 +14,10 @@ public class DescriptionDTO {
     private String fila;
 
     @JsonProperty("asiento")
-    private String asiento;
+    private Long asiento;
 
     public String getZona() { return zona; }
     public String getSeccion() { return seccion; }
     public String getFila() { return fila; }
-    public String getAsiento() { return asiento; }
+    public Long getAsiento() { return asiento; }
 }

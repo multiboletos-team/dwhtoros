@@ -16,11 +16,11 @@ public class DetalleVenta {
     private Venta venta;
 
     private String typeProduct;
-	private int sku;
+	private Long sku;
     private String zone;
 	private String secction;
 	private String row;
-	private String seat;
+	private Long seat;
 	private String nameClient;
 	private String address;
 	private BigDecimal priceExTax;
@@ -42,10 +42,10 @@ public class DetalleVenta {
 	public void setTypeProduct(String typeProduct) {
 		this.typeProduct = typeProduct;
 	}
-	public int getSku() {
+	public Long getSku() {
 		return sku;
 	}
-	public void setSku(int sku) {
+	public void setSku(Long sku) {
 		this.sku = sku;
 	}
     public String getZone() {
@@ -66,10 +66,10 @@ public class DetalleVenta {
 	public void setRow(String row) {
 		this.row = row;
 	}
-    public String getSeat() {
+    public Long getSeat() {
 		return seat;
 	}
-	public void setSeat(String seat) {
+	public void setSeat(Long seat) {
 		this.seat = seat;
 	}
     public String getNameClient() {
