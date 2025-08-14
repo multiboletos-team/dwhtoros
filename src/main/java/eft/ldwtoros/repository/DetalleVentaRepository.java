@@ -14,7 +14,10 @@ import eft.ldwtoros.entity.DetalleVenta;
 public interface DetalleVentaRepository extends JpaRepository<DetalleVenta, Long> {
 	 List<DetalleVenta> findByVentaOrderId(Long orderId);
 	 
-	    Optional<DetalleVenta> findFirstByVentaOrderIdAndSecctionAndRowAndSeat(
+	// ¿Quedan asientos vivos?
+	 long countByVentaOrderIdAndCancelFalse(Long orderId);
+
+	 Optional<DetalleVenta> findFirstByVentaOrderIdAndSecctionAndRowAndSeat(
 	            Long orderId, String secction, String row, Long seat
 	        );
 }

@@ -1,28 +1,49 @@
 package eft.ldwtoros.service;
 
 import eft.ldwtoros.dto.VentaRequestDTO;
+import eft.ldwtoros.dto.DetalleVentaDTO;
 import eft.ldwtoros.dto.ProductoDTO;
+import eft.ldwtoros.dto.VentaDTO;
 import eft.ldwtoros.entity.DetalleVenta;
 import eft.ldwtoros.entity.Venta;
 import eft.ldwtoros.repository.DetalleVentaRepository;
 import eft.ldwtoros.repository.VentaRepository;
+import eft.ldwtoros.repository.spec.VentaSpecifications;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
+import jakarta.persistence.PersistenceContext;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Sort.Direction;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
 public class VentaService {
+	
+	@PersistenceContext
+	private EntityManager em;
+
 
     @Autowired
     private VentaRepository ventaRepository;
 
     @Autowired
     private DetalleVentaRepository detalleVentaRepository;
+    
+    public VentaService(VentaRepository ventaRepo, DetalleVentaRepository detalleRepo) {
+        this.ventaRepository = ventaRepo;
+        this.detalleVentaRepository = detalleRepo;
+    }
 
     @Transactional
     public void insertarVenta(VentaRequestDTO dto) {
@@ -100,7 +121,7 @@ public class VentaService {
     }
 
     @Transactional
-    public boolean cancelarItemPorOrderYAsiento(Long orderId, String secction, String row, String seat) {
+    public boolean cancelarItemPorOrderYAsiento(Long orderId, String secction, String row, Long seat) {
         Venta venta = ventaRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Venta no encontrada para orderId: " + orderId));
 
@@ -124,5 +145,105 @@ public class VentaService {
         }
 
         return true;
+    }
+    
+    @Transactional
+    public boolean revisarYMarcarVentaCancelada(Long orderId) {
+        long vivos = detalleVentaRepository.countByVentaOrderIdAndCancelFalse(orderId);
+        if (vivos == 0) {
+            // no quedan detalles vivos → marca la venta como cancelada
+            ventaRepository.marcarCanceladaPorOrderId(orderId);
+            return true;
+        }
+        return false;
+    }
+    
+    public List<VentaDTO> buscarVentas(Long orderId, LocalDate fechaDesde, LocalDate fechaHasta, Boolean cancel) {
+        Specification<Venta> spec = Specification
+                .where(VentaSpecifications.orderIdEq(orderId))
+                .and(VentaSpecifications.fechaBetween(fechaDesde, fechaHasta)) // <-- optimizada
+                // .and(VentaSpecifications.fechaBetweenDateCast(fechaDesde, fechaHasta)) // literal
+                //.and(VentaSpecifications.fechaVentaEq(fechaVenta))
+                .and(VentaSpecifications.cancelEq(cancel));
+
+        return ventaRepository.findAll(spec,Sort.by(Direction.ASC, "id")).stream()
+                .map(this::toVentaDTO)
+                .toList();
+    }
+
+    public List<DetalleVentaDTO> listarDetallesPorOrderId(Long orderId) {
+        return detalleVentaRepository.findByVentaOrderId(orderId).stream()
+                .sorted(Comparator.comparing(DetalleVenta::getId))                 // ASC
+                // .sorted(Comparator.comparing(DetalleVenta::getId).reversed())   // DESC
+                .map(this::toDetalleDTO)
+                .toList();
+    }
+    
+    @Transactional
+    public void actualizarTotalesVenta(Long orderId,
+                                       BigDecimal totalExTax,
+                                       BigDecimal totalIncTax,
+                                       Integer itemsTotal) {
+        Venta v = em.createQuery(
+                "SELECT v FROM Venta v WHERE v.orderId = :orderId", Venta.class)
+            .setParameter("orderId", orderId)
+            .getSingleResult();
+
+        v.setTotalExTax(totalExTax);
+        v.setTotalIncTax(totalIncTax);
+        if (itemsTotal != null) {
+            v.setItemsTotal(itemsTotal);
+        }
+        em.merge(v);
+    }
+
+    /* (opcional) mantén el método anterior para compatibilidad */
+    @Transactional
+    public void actualizarTotalesVenta(Long orderId,
+                                       BigDecimal totalExTax,
+                                       BigDecimal totalIncTax) {
+        actualizarTotalesVenta(orderId, totalExTax, totalIncTax, null);
+    }
+
+    /* ---------- Mapping ---------- */
+
+    private VentaDTO toVentaDTO(Venta v) {
+        VentaDTO dto = new VentaDTO();
+        dto.setId(v.getId());                               // Long
+        dto.setOrderId(v.getOrderId());                     // Long
+        dto.setEventId(v.getEventId());                     // int -> Integer
+        dto.setItemsTotal(v.getItemsTotal());               // int -> Integer
+        dto.setEventDescription(v.getEventDescription());
+        dto.setSeriesGame(v.getSeriesGame());
+        dto.setTotalExTax(v.getTotalExTax());               // BigDecimal
+        dto.setTotalIncTax(v.getTotalIncTax());             // BigDecimal
+        dto.setTotalDiscount(v.getTotalDiscount());         // BigDecimal
+        dto.setPaymentMethod(v.getPaymentMethod());
+        dto.setPaymentCompleted(v.isPaymentCompleted());    // boolean -> Boolean
+        dto.setCurrencyCode(v.getCurrencyCode());
+        dto.setOrderSource(v.getOrderSource());
+        dto.setStoreCreditAmount(v.getStoreCreditAmount()); // BigDecimal
+        dto.setFechaVenta(v.getFechaVenta());               // LocalDateTime
+        dto.setEmailCliente(v.getEmailCliente());
+        dto.setTelefonoCliente(v.getTelefonoCliente());
+        dto.setCancel(v.isCancel());                        // boolean -> Boolean
+        return dto;
+    }
+
+    private DetalleVentaDTO toDetalleDTO(DetalleVenta d) {
+        DetalleVentaDTO dto = new DetalleVentaDTO();
+        dto.setId(d.getId());
+        dto.setVentaId(d.getVenta().getId());
+        dto.setSku(d.getSku());
+        dto.setZone(d.getZone());
+        dto.setSecction(d.getSecction());
+        dto.setRow(d.getRow());
+        dto.setSeat(d.getSeat());
+        dto.setDiscountAplied(d.getDiscountAplied());
+        dto.setPriceExTax(d.getPriceExTax());
+        dto.setPriceIncTax(d.getPriceIncTax());
+        dto.setTypeProduct(d.getTypeProduct());
+        dto.setCancel(d.isCancel());
+        return dto;
     }
 }

@@ -12,7 +12,8 @@ public class CancelarItemRequest {
 	    // NUEVOS (opcionales)
 	    private BigDecimal totalExTax;
 	    private BigDecimal totalIncTax;
-	
+	    private Integer itemsTotal;
+	    
 	 public Long getOrderId() { return orderId; }
 	 public void setOrderId(Long orderId) { this.orderId = orderId; }
 	 public String getSecction() { return secction; }
@@ -25,4 +26,6 @@ public class CancelarItemRequest {
 	 public void setTotalExTax(BigDecimal totalExTax) { this.totalExTax = totalExTax; }
 	 public BigDecimal getTotalIncTax() { return totalIncTax; }
 	 public void setTotalIncTax(BigDecimal totalIncTax) { this.totalIncTax = totalIncTax; }
+	 public Integer getItemsTotal() { return itemsTotal; }
+	 public void setItemsTotal(Integer itemsTotal) { this.itemsTotal = itemsTotal; }
 }

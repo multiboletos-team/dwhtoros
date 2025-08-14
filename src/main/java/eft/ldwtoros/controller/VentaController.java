@@ -165,6 +165,11 @@ public class VentaController {
                         null)
                 );
             }
+            
+            if (req.getItemsTotal() != null && req.getItemsTotal() < 0) {
+                return ResponseEntity.badRequest()
+                    .body(new ApiResponse(400, "itemsTotal no puede ser negativo", null));
+            }
 
             // 1) Cancelar asiento
             // Llama al servicio con tipos numéricos para secction y seat
@@ -174,20 +179,28 @@ public class VentaController {
                     req.getRow().trim(),
                     req.getSeat());
             
-            // 2) Actualizar montos de la venta (opcional)
+            // 2) Actualizar montos de la venta (opcional)¡
             if (req.getTotalExTax() != null && req.getTotalIncTax() != null) {
                 ventaService.actualizarTotalesVenta(
                         req.getOrderId(),
                         req.getTotalExTax(),
-                        req.getTotalIncTax()
+                        req.getTotalIncTax(),
+                        req.getItemsTotal()   // <-- NUEVO (puede venir null)
                 );
             }
+            
+         // 3) Marcar venta como cancelada si ya no quedan detalles vivos
+            boolean ventaCancelada = ventaService.revisarYMarcarVentaCancelada(req.getOrderId());
 
             Map<String, Object> payload = new HashMap<>();
             payload.put("orderId", req.getOrderId());
             payload.put("secction", req.getSecction());
             payload.put("row", req.getRow());
             payload.put("seat", req.getSeat());
+            payload.put("totalExTax", req.getTotalExTax());
+            payload.put("totalIncTax", req.getTotalIncTax());
+            payload.put("itemsTotal", req.getItemsTotal());
+            payload.put("ventaCancelada", ventaCancelada); // <-- útil para el cliente
 
             return ResponseEntity.ok(new ApiResponse(200, "Asiento cancelado correctamente", payload));
 
