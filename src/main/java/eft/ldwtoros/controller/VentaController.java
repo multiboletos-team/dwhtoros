@@ -3,6 +3,8 @@ package eft.ldwtoros.controller;
 
 import eft.ldwtoros.dto.ApiResponse;
 import eft.ldwtoros.dto.CancelarItemRequest;
+import eft.ldwtoros.dto.CancelarParcialBatchRequest;
+import eft.ldwtoros.dto.CancelarParcialItem;
 import eft.ldwtoros.dto.DetalleVentaDTO;
 import eft.ldwtoros.dto.VentaDTO;
 import eft.ldwtoros.dto.VentaRequestDTO;
@@ -240,6 +242,85 @@ public class VentaController {
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ApiResponse(500, "Error al cancelar asiento: " + e.getMessage(), null));
+        }
+    }
+    
+    @PutMapping("/cancelar/parcial/lote")
+    public ResponseEntity<ApiResponse> cancelarParcialLote(@RequestBody CancelarParcialBatchRequest req,
+                                                           HttpServletRequest httpReq) {
+        try {
+            // Validaciones básicas
+            if (req.getOrderId() == null || req.getItems() == null || req.getItems().isEmpty()) {
+                return ResponseEntity.badRequest().body(
+                    new ApiResponse(400, "orderId e items son obligatorios", null)
+                );
+            }
+
+            // Si vienen montos, deben venir ambos
+            if ((req.getTotalExTax() != null || req.getTotalIncTax() != null)
+                && (req.getTotalExTax() == null || req.getTotalIncTax() == null)) {
+                return ResponseEntity.badRequest().body(
+                    new ApiResponse(400, "Si envías montos, totalExTax y totalIncTax son obligatorios ambos", null)
+                );
+            }
+
+            // Normalizamos trims
+            for (CancelarParcialItem it : req.getItems()) {
+                if (it.getSecction() == null || it.getSecction().isBlank()
+                 || it.getRow() == null || it.getRow().isBlank()
+                 || it.getSeat() == null || it.getSeat() <= 0) {
+                    return ResponseEntity.badRequest().body(
+                        new ApiResponse(400, "Cada item debe incluir secction, row y seat válidos", null)
+                    );
+                }
+                it.setRow(it.getRow().trim());
+            }
+
+            // 1) Cancelación en lote
+            Map<String, Object> payload = ventaService.cancelarParcialEnLote(req.getOrderId(), req.getItems());
+
+            // 2) Actualización de montos opcional
+            if (req.getTotalExTax() != null && req.getTotalIncTax() != null) {
+                ventaService.actualizarTotalesVenta(
+                    req.getOrderId(),
+                    req.getTotalExTax(),
+                    req.getTotalIncTax(),
+                    req.getItemsTotal()
+                );
+                payload.put("totalsUpdated", true);
+            } else {
+                payload.put("totalsUpdated", false);
+            }
+
+            return ResponseEntity.ok(new ApiResponse(200, "Procesado", payload));
+
+        } catch (IllegalArgumentException iae) {
+            // orderId no encontrado u otra validación dura
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse(404, iae.getMessage(), Map.of("orderId", req.getOrderId())));
+
+        } catch (Exception e) {
+            // Bitácora de error (similar a tu manejo actual)
+            try {
+                String raw = "{\"orderId\":" + req.getOrderId() + ",\"itemsCount\":" +
+                             (req.getItems() == null ? 0 : req.getItems().size()) + "}";
+
+                StringWriter sw = new StringWriter();
+                e.printStackTrace(new PrintWriter(sw));
+                String fullStackTrace = sw.toString();
+
+                errorLogRepository.save(new ErrorLog(
+                    httpReq.getRequestURI(),
+                    httpReq.getMethod(),
+                    raw.substring(0, Math.min(raw.length(), 2000)),
+                    String.valueOf(req.getOrderId()),
+                    "Error en cancelar/parcial/lote",
+                    fullStackTrace.substring(0, Math.min(fullStackTrace.length(), 1995))
+                ));
+            } catch (Exception ignored) {}
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse(500, "Error interno al cancelar en lote", null));
         }
     }
     
