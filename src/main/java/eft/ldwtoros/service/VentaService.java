@@ -1,6 +1,7 @@
 package eft.ldwtoros.service;
 
 import eft.ldwtoros.dto.VentaRequestDTO;
+import eft.ldwtoros.dto.CancelarParcialItem;
 import eft.ldwtoros.dto.DetalleVentaDTO;
 import eft.ldwtoros.dto.ProductoDTO;
 import eft.ldwtoros.dto.VentaDTO;
@@ -10,9 +11,10 @@ import eft.ldwtoros.repository.DetalleVentaRepository;
 import eft.ldwtoros.repository.VentaRepository;
 import eft.ldwtoros.repository.spec.VentaSpecifications;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.NoResultException;
+
 import jakarta.persistence.PersistenceContext;
 
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
@@ -24,8 +26,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class VentaService {
@@ -204,6 +210,166 @@ public class VentaService {
                                        BigDecimal totalIncTax) {
         actualizarTotalesVenta(orderId, totalExTax, totalIncTax, null);
     }
+    
+    @Transactional
+    public CancelOutcome tryCancelarItem(Long orderId, String secction, String row, Long seat) {
+        Optional<Venta> ventaOpt = ventaRepository.findByOrderId(orderId);
+        if (ventaOpt.isEmpty()) {
+            throw new IllegalArgumentException("Venta no encontrada para orderId: " + orderId);
+        }
+
+        var optDetalle = detalleVentaRepository
+            .findFirstByVentaOrderIdAndSecctionAndRowAndSeat(orderId, secction, row, seat);
+
+        if (optDetalle.isEmpty()) {
+            return CancelOutcome.NOT_FOUND;
+        }
+
+        DetalleVenta d = optDetalle.get();
+        if (d.isCancel()) {
+            return CancelOutcome.ALREADY_CANCELLED;
+        }
+
+        d.setCancel(true);
+        detalleVentaRepository.save(d);
+        return CancelOutcome.CANCELLED;
+    }
+
+    /** Procesa un lote de asientos y devuelve mapa con resultados por item */
+    @Deprecated
+    @Transactional
+    public Map<String, Object> cancelarParcialEnLoteOLD(Long orderId, List<eft.ldwtoros.dto.CancelarParcialItem> items) {
+        Map<String, Object> result = new HashMap<>();
+        List<Map<String, Object>> detalleResultados = new ArrayList<>();
+
+        int cancelled = 0, already = 0, notFound = 0;
+
+        for (var it : items) {
+            Map<String, Object> r = new HashMap<>();
+            r.put("secction", it.getSecction());
+            r.put("row", it.getRow());
+            r.put("seat", it.getSeat());
+
+            try {
+                CancelOutcome outcome = tryCancelarItem(orderId, it.getSecction(), it.getRow(), it.getSeat());
+                r.put("status", outcome.name());
+                switch (outcome) {
+                    case CANCELLED -> cancelled++;
+                    case ALREADY_CANCELLED -> already++;
+                    case NOT_FOUND -> notFound++;
+                }
+            } catch (IllegalArgumentException ex) {
+                // Si la venta no existe, abortamos todo el lote
+                throw ex;
+            } catch (Exception ex) {
+                r.put("status", "ERROR");
+                r.put("message", ex.getMessage());
+            }
+
+            detalleResultados.add(r);
+        }
+
+        boolean ventaCancelada = revisarYMarcarVentaCancelada(orderId);
+
+        Map<String, Integer> totals = new HashMap<>();
+        totals.put("requested", items.size());
+        totals.put("cancelled", cancelled);
+        totals.put("alreadyCancelled", already);
+        totals.put("notFound", notFound);
+
+        result.put("orderId", orderId);
+        result.put("results", detalleResultados);
+        result.put("totals", totals);
+        result.put("ventaCancelada", ventaCancelada);
+        return result;
+    }
+    
+    @Transactional
+    public Map<String, Object> cancelarParcialEnLote(Long orderId, List<CancelarParcialItem> items) {
+        // 0) Validaciones básicas
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Se requiere al menos un item para cancelar.");
+        }
+
+        // 1) Traemos TODO lo de la orden en 1 consulta
+        List<DetalleVenta> detalles = detalleVentaRepository.findByVentaOrderId(orderId);
+        if (detalles.isEmpty()) {
+            throw new IllegalArgumentException("Venta no encontrada o sin detalles para orderId: " + orderId);
+        }
+
+        // 2) Indexamos por clave compuesta: "secction|row|seat"
+        Map<String, DetalleVenta> index = new HashMap<>(detalles.size() * 2);
+        for (DetalleVenta d : detalles) {
+            String key = buildKey(d.getSecction(), d.getRow(), d.getSeat());
+            index.put(key, d);
+        }
+
+        // 3) Procesamos solicitudes
+        List<Map<String, Object>> detalleResultados = new ArrayList<>(items.size());
+        List<Long> idsParaCancelar = new ArrayList<>();
+
+        int cancelled = 0, already = 0, notFound = 0;
+
+        for (var it : items) {
+            String key = buildKey(it.getSecction(), it.getRow(), it.getSeat());
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("secction", it.getSecction());
+            r.put("row", it.getRow());
+            r.put("seat", it.getSeat());
+
+            DetalleVenta d = index.get(key);
+            if (d == null) {
+                r.put("status", CancelOutcome.NOT_FOUND.name());
+                notFound++;
+            } else if (Boolean.TRUE.equals(d.isCancel())) {
+                r.put("status", CancelOutcome.ALREADY_CANCELLED.name());
+                already++;
+            } else {
+                // Marcaremos este ID en el UPDATE masivo
+                idsParaCancelar.add(d.getId());
+                r.put("status", CancelOutcome.CANCELLED.name());
+                cancelled++;
+            }
+
+            detalleResultados.add(r);
+        }
+
+        // 4) Persistimos en un solo golpe
+        if (!idsParaCancelar.isEmpty()) {
+            detalleVentaRepository.bulkCancelByIds(idsParaCancelar);
+            // Si no quieres bulk:
+            // for (Long id : idsParaCancelar) index.get(id).setCancel(true);
+            // detalleVentaRepository.saveAll(index.values()); // o sólo los modificados
+        }
+
+        // 5) Regla de “venta cancelada” (si aplica en tu dominio)
+        boolean ventaCancelada = revisarYMarcarVentaCancelada(orderId);
+
+        Map<String, Integer> totals = new LinkedHashMap<>();
+        totals.put("requested", items.size());
+        totals.put("cancelled", cancelled);
+        totals.put("alreadyCancelled", already);
+        totals.put("notFound", notFound);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("orderId", orderId);
+        payload.put("totals", totals);
+        payload.put("results", detalleResultados);
+        payload.put("ventaCancelada", ventaCancelada);
+
+        return payload;
+    }
+
+    /** Clave compuesta normalizada para mapas O(1) */
+    private String buildKey(String secction, String row, Long seat) {
+        // Normaliza espacios/caso si lo consideras necesario
+        String s = secction == null ? "" : secction.trim();
+        String r = row == null ? "" : row.trim();
+        String t = seat == null ? "" : seat.toString();
+        return s + "|" + r + "|" + t;
+    }
+
+    
 
     /* ---------- Mapping ---------- */
 
