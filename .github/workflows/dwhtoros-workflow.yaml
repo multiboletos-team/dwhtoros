@@ -79,16 +79,12 @@ jobs:
           push: true
           tags: mescalera2787/msdwhtoros:latestV1
 
-  deploy:
-    needs: build
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Deploy to EC2
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-          SERVER_PORT: ${{ secrets.SERVER_PORT }}
-          SERVER_KEY: ${{ secrets.SERVER_KEY }}
-        run: bash deploy.sh
+deploy:
+  needs: docker-build
+  runs-on: [self-hosted, aws-dwh]
+  steps:
+    - uses: actions/checkout@v4
+    - name: Make deploy executable
+      run: chmod +x ./deploy.sh
+    - name: Local deploy
+      run: ./deploy.sh

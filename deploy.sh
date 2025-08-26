@@ -1,36 +1,25 @@
-#!/bin/bash
-start=$(date +"%s")
+NEW_IMAGE="mescalera2787/msdwhtoros:latestV1"
+OLD_IMAGE="apache/services-dwhtoros"
+APP_NAME="dwhtoros"
+APP_PORT="8080"
 
-# Crear clave temporal para SSH
-echo "${SERVER_KEY}" > key.pem
-chmod 600 key.pem
+# Parar por nombre (si ya existe el contenedor estable)
+docker ps -q -f name=^/${APP_NAME}$ | xargs -r docker stop
+docker ps -aq -f name=^/${APP_NAME}$ | xargs -r docker rm
 
-ssh -i key.pem -p ${SERVER_PORT} ${SERVER_USER}@${SERVER_HOST} -o StrictHostKeyChecking=no << 'ENDSSH'
-    echo "Conectado a EC2. Desplegando contenedor..."
+# Parar por imagen vieja (si existiera)
+docker ps -q -f ancestor="${OLD_IMAGE}" | xargs -r docker stop
+docker ps -aq -f ancestor="${OLD_IMAGE}" | xargs -r docker rm
 
-    CONTAINER_NAME=dhwtoros
-    IMAGE_NAME=mescalera2787/msdwhtoros:latest
+# Parar lo que tenga el puerto 8080 (último recurso)
+CID=$(docker ps -q --filter "publish=8080")
+[ -n "$CID" ] && docker stop "$CID" && docker rm "$CID"
 
-    docker pull $IMAGE_NAME
+docker pull "${NEW_IMAGE}"
+docker run -d --name "${APP_NAME}" \
+  --restart unless-stopped \
+  -p 8080:"${APP_PORT}" \
+  -e JAVA_OPTS="-Xms256m -Xmx512m" \
+  "${NEW_IMAGE}"
 
-    if [ "$(docker ps -q -f name=$CONTAINER_NAME)" ]; then
-        echo "Deteniendo contenedor anterior..."
-        docker stop $CONTAINER_NAME
-    fi
-
-    docker run -d --rm -p 8080:8080 --name $CONTAINER_NAME $IMAGE_NAME
-ENDSSH
-
-result=$?
-rm -f key.pem
-
-end=$(date +"%s")
-diff=$(($end - $start))
-
-if [ $result -eq 0 ]; then
-  echo "✅ Despliegue completado en ${diff}s"
-  exit 0
-else
-  echo "❌ Error en el despliegue"
-  exit 1
-fi
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
