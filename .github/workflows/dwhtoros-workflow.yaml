@@ -79,12 +79,12 @@ jobs:
           push: true
           tags: mescalera2787/msdwhtoros:latestV1
 
-deploy:
-  needs: docker-build
-  runs-on: [self-hosted, aws-dwh]
-  steps:
-    - uses: actions/checkout@v4
-    - name: Make deploy executable
-      run: chmod +x ./deploy.sh
-    - name: Local deploy
-      run: ./deploy.sh
+  deploy:
+    needs: docker-build
+    runs-on: [self-hosted, aws-dwh]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make deploy executable
+        run: chmod +x ./deploy.sh
+      - name: Local deploy
+        run: ./deploy.sh
